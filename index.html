@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>SUPER WRESTLERS 3D</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main id="menu" class="panel">
+    <h1>SUPER WRESTLERS <span>3D</span></h1>
+    <p>لعبة فرق خيالية — 4 ضد 4 أونلاين</p>
+    <label>اختار شخصيتك</label>
+    <select id="character"></select>
+    <label>اختار الساحة (مطلوب عند إنشاء الغرفة)</label>
+    <select id="arena"></select>
+    <div class="actions">
+      <button id="createBtn">إنشاء غرفة</button>
+    </div>
+    <label>كود الغرفة</label>
+    <input id="roomCode" maxlength="6" placeholder="اكتب كود صاحبك">
+    <button id="joinBtn" class="secondary">انضم لغرفة</button>
+    <p id="status" role="status">اختار شخصية وابدأ اللعب.</p>
+    <section id="lobby" hidden>
+      <h2>غرفة الانتظار</h2>
+      <p>كود الغرفة: <strong id="codeLabel">------</strong></p>
+      <p id="teamLabel">في انتظار اللاعبين...</p>
+      <ul id="players"></ul>
+      <button id="startBtn">ابدأ المباراة (للمضيف)</button>
+    </section>
+  </main>
+
+  <section id="game" hidden>
+    <header class="hud">
+      <div><strong>الفريق الأزرق</strong><div id="blueScore">4 لاعبين كحد أقصى</div></div>
+      <div id="matchStatus">في انتظار بدء المباراة</div>
+      <div><strong>الفريق البرتقالي</strong><div id="orangeScore">4 لاعبين كحد أقصى</div></div>
+    </header>
+    <div id="stage"></div>
+    <footer class="controls">
+      <span>الحركة: W A S D أو الأسهم</span>
+      <span>القدرة الخارقة: Space</span>
+      <button id="leaveBtn" class="secondary">خروج</button>
+    </footer>
+  </section>
+  <script src="https://cdn.socket.io/4.8.4/socket.io.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>
