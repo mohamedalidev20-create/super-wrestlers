@@ -1,186 +1,34 @@
-// ضع رابط سيرفر Socket.IO المنشور هنا بعد نشر backend.
-const SERVER_URL = "https://YOUR-SERVER-DOMAIN.example";
-
-const CHARACTERS = [
-  "Nova","Blaze","Frost","Volt","Titan","Shadow","Comet","Vortex",
-  "Phoenix","Glacier","Storm","Echo","Atlas","Lumen","Rogue","Orbit",
-  "Quake","Mystic","Pulse","Solar","Lunar","Cinder","Aero","Neon",
-  "Drift","Spark","Boulder","Mirage","Flare","Cyclone","Prism","Cosmo"
-];
-const ARENAS = [
-  "Neon City","Sky Temple","Crystal Dome","Volcano Ring",
-  "Ice Fortress","Jungle Arena","Moon Base","Desert Colosseum"
-];
-const ARENA_COLORS = [0x172b4d,0x3b245f,0x174d50,0x542d22,0x31516b,0x245039,0x171d46,0x59452b];
-
-const $ = id => document.getElementById(id);
-const characterSelect = $("character");
-const arenaSelect = $("arena");
-CHARACTERS.forEach((name,i)=>characterSelect.add(new Option(`${i+1}. ${name}`,name)));
-ARENAS.forEach((name,i)=>arenaSelect.add(new Option(name,String(i))));
-
-let socket = null, roomCode = null, isHost = false, myId = null;
-let scene, camera, renderer, arenaFloor;
-let avatars = new Map(), keys = new Set(), myPosition = {x:0,z:0};
-let gameStarted = false, lastMoveSent = 0;
-
-function setStatus(message){ $("status").textContent = message; }
-function connect(){
-  if(socket?.connected) return Promise.resolve();
-  return new Promise((resolve,reject)=>{
-    const timer=setTimeout(()=>reject(new Error("انتهت مهلة الاتصال بالسيرفر")),10000);
-    socket.once("connect",()=>{clearTimeout(timer);myId=socket.id;resolve();});
-    socket.once("connect_error",err=>{clearTimeout(timer);reject(err);});
-    socket.connect();
-  });
+const NAMES=["Nova","Blaze","Frost","Volt","Titan","Shadow","Comet","Vortex","Phoenix","Glacier","Storm","Echo","Atlas","Lumen","Rogue","Orbit","Quake","Mystic","Pulse","Solar","Lunar","Cinder","Aero","Neon","Drift","Spark","Boulder","Mirage","Flare","Cyclone","Prism","Cosmo"];
+const POWERS=["طاقة النجم","لهب","جليد","برق","قوة العمالقة","ظل","اندفاع","دوامة","طائر النار","صقيع","عاصفة","موجة صوت","قوة الأرض","نور","سرعة","مدار","زلزال","سحر","نبضة","شمس","قمر","رماد","هواء","طاقة نيون","انزلاق","شرارة","صخرة","وهم","اشتعال","إعصار","منشور","كون"];
+const ARENAS=["NEON CITY","SKY TEMPLE","CRYSTAL DOME","VOLCANO RING","ICE FORTRESS","JUNGLE ARENA","MOON BASE","DESERT COLOSSEUM"];
+const $=id=>document.getElementById(id);
+let chosen=0,level=1,playerHP=100,enemyHP=100,playerX=.27,enemyX=.73,blocking=false,gameOver=false,attackCooldown=0,powerCooldown=0,enemyCooldown=0,keys={},raf=0;
+const roster=$("roster");
+NAMES.forEach((name,i)=>{const b=document.createElement("button");b.className="fighter-choice"+(i===0?" selected":"");b.innerHTML=`<img src="assets/portraits/${String(i+1).padStart(2,"0")}.svg" alt="${name}"><span>${name}</span>`;b.onclick=()=>selectFighter(i);roster.appendChild(b);});
+function portrait(i){return `assets/portraits/${String(i+1).padStart(2,"0")}.svg`;}
+function selectFighter(i){chosen=i;document.querySelectorAll(".fighter-choice").forEach((el,n)=>el.classList.toggle("selected",n===i));$("selectedPortrait").src=portrait(i);$("selectedName").textContent=NAMES[i];$("selectedPower").textContent=POWERS[i];}
+function startFight(){ $("selectScreen").hidden=true;$("fightScreen").hidden=false;$("resultModal").hidden=true;playerHP=100;enemyHP=100;playerX=.27;enemyX=.73;blocking=false;gameOver=false;attackCooldown=0;powerCooldown=0;enemyCooldown=0;
+$("playerPortrait").src=portrait(chosen);$("playerName").textContent=NAMES[chosen];const enemy=(chosen+level*7+3)%32;$("enemyPortrait").src=portrait(enemy);$("enemyName").textContent=NAMES[enemy];$("levelFight").textContent=level;$("levelSelect").textContent=level;$("arenaName").textContent=ARENAS[(level-1)%8];$("fightMessage").textContent="استعد للقتال!";updateBars();draw();cancelAnimationFrame(raf);loop();}
+$("startBtn").onclick=startFight;
+function updateBars(){$("playerHealth").style.width=playerHP+"%";$("enemyHealth").style.width=enemyHP+"%";}
+function say(t){$("fightMessage").textContent=t;}
+function hit(){if(gameOver||attackCooldown>0)return;attackCooldown=.55;if(Math.abs(playerX-enemyX)<.34){const damage=12+Math.min(8,level);enemyHP=Math.max(0,enemyHP-damage);say("ضربة قوية!");updateBars();if(enemyHP===0)finish(true);}else say("قرب من الخصم الأول!");}
+function power(){if(gameOver||powerCooldown>0)return;powerCooldown=4.5;if(Math.abs(playerX-enemyX)<.48){enemyHP=Math.max(0,enemyHP-(25+Math.min(level,10)*2));say("قوة خارقة!");updateBars();if(enemyHP===0)finish(true);}else say("القوة الخارقة محتاجة تقرب!");}
+function finish(win){if(gameOver)return;gameOver=true;cancelAnimationFrame(raf);$("resultModal").hidden=false;$("resultTitle").textContent=win?"فزت! 🏆":"البوت كسب الجولة";$("resultText").textContent=win?`مبروك! هزمت الخصم في المستوى ${level}. المستوى القادم أصعب.`:"حاول تاني، وصدّ ضربات البوت واستخدم قوتك الخارقة."; $("nextBtn").hidden=!win;}
+function loop(){if(gameOver)return;const dt=1/60;attackCooldown=Math.max(0,attackCooldown-dt);powerCooldown=Math.max(0,powerCooldown-dt);enemyCooldown=Math.max(0,enemyCooldown-dt);
+let move=0;if(keys.left)move-=1;if(keys.right)move+=1;if(move)playerX=Math.max(.08,Math.min(.92,playerX+move*.006));
+const diff=Math.abs(playerX-enemyX);const speed=Math.min(.0048,.0018+level*.00022);
+if(enemyCooldown<=0){if(diff>.22)enemyX+=Math.sign(playerX-enemyX)*speed;else if(Math.random()<(.012+Math.min(level,.0)*.001)){enemyHit();enemyCooldown=Math.max(.45,1.6-level*.07);}else if(diff<.30&&Math.random()<.015){enemyHit();enemyCooldown=Math.max(.5,1.4-level*.05);}}
+draw();raf=requestAnimationFrame(loop);}
+function enemyHit(){if(blocking){say("صدّيت ضربة البوت!");return;}const dmg=Math.min(18,5+level*1.15);playerHP=Math.max(0,playerHP-dmg);say("البوت هاجمك!");updateBars();if(playerHP===0)finish(false);}
+function draw(){const c=$("gameCanvas"),r=c.getBoundingClientRect(),dpr=Math.min(devicePixelRatio||1,2);if(c.width!==Math.floor(r.width*dpr)||c.height!==Math.floor(r.height*dpr)){c.width=Math.floor(r.width*dpr);c.height=Math.floor(r.height*dpr);}const ctx=c.getContext("2d");ctx.setTransform(dpr,0,0,dpr,0,0);const w=r.width,h=r.height;ctx.clearRect(0,0,w,h);
+const arenaIndex=(level-1)%8;const sky=["#152b4c","#38275c","#1b4c55","#572a20","#31536a","#214832","#171d48","#5a462b"][arenaIndex];const grad=ctx.createLinearGradient(0,0,0,h);grad.addColorStop(0,sky);grad.addColorStop(.72,"#4a5364");grad.addColorStop(1,"#76543c");ctx.fillStyle=grad;ctx.fillRect(0,0,w,h);
+ctx.fillStyle="#182233";ctx.fillRect(0,h*.73,w,h*.27);ctx.strokeStyle="#e5a34b";ctx.lineWidth=5;ctx.strokeRect(w*.07,h*.30,w*.86,h*.49);ctx.lineWidth=2;for(let j=1;j<4;j++){ctx.beginPath();ctx.moveTo(w*.07,h*(.30+j*.12));ctx.lineTo(w*.93,h*(.30+j*.12));ctx.stroke();}
+for(let i=0;i<8;i++){const x=w*(.08+i*.12);ctx.fillStyle="#c5d2df";ctx.fillRect(x-3,h*.29,6,h*.5);}
+drawFighter(ctx,w*playerX,h*.72,1,"#36a9ff",false);drawFighter(ctx,w*enemyX,h*.72,1,"#ff9145",true);
 }
-
-$("createBtn").onclick = async ()=>{
-  try{
-    await connect();
-    socket.emit("createRoom",{character:characterSelect.value,arena:Number(arenaSelect.value)},reply=>{
-      if(!reply?.ok){setStatus(reply?.error||"تعذر إنشاء الغرفة");return;}
-      roomCode=reply.code;isHost=true;showLobby();
-    });
-  }catch(e){setStatus("مش قادر أوصل للسيرفر. راجع رابط السيرفر.");}
-};
-$("joinBtn").onclick = async ()=>{
-  const code=$("roomCode").value.trim().toUpperCase();
-  if(!code){setStatus("اكتب كود الغرفة الأول.");return;}
-  try{
-    await connect();
-    socket.emit("joinRoom",{code,character:characterSelect.value},reply=>{
-      if(!reply?.ok){setStatus(reply?.error||"تعذر دخول الغرفة");return;}
-      roomCode=code;isHost=false;showLobby();
-    });
-  }catch(e){setStatus("مش قادر أوصل للسيرفر. راجع رابط السيرفر.");}
-};
-function showLobby(){
-  $("lobby").hidden=false;
-  $("codeLabel").textContent=roomCode;
-  setStatus("اتصلت بالغرفة بنجاح!");
-}
-$("startBtn").onclick=()=>socket?.emit("startMatch",{code:roomCode},reply=>{
-  if(!reply?.ok)setStatus(reply?.error||"مش قادر أبدأ المباراة");
-});
-$("leaveBtn").onclick=()=>{if(socket&&roomCode)socket.emit("leaveRoom",{code:roomCode});location.reload();};
-
-if(!SERVER_URL.startsWith("https://YOUR-SERVER")){
-  // لا شيء؛ سيتم الاتصال عند إنشاء أو دخول غرفة.
-}
-
-socket = io(SERVER_URL,{autoConnect:false,transports:["websocket","polling"]});
-socket.on("connect",()=>{myId=socket.id;});
-socket.on("roomUpdate",room=>{
-  $("codeLabel").textContent=room.code;
-  $("teamLabel").textContent=`اللاعبون: ${room.players.length}/8`;
-  $("players").innerHTML="";
-  room.players.forEach(p=>{
-    const li=document.createElement("li");
-    li.textContent=`${p.character} — ${p.team==="blue"?"الأزرق":"البرتقالي"}${p.id===myId?" (أنت)":""}`;
-    $("players").appendChild(li);
-  });
-  $("startBtn").disabled=room.hostId!==myId;
-});
-socket.on("matchStarted",data=>{
-  $("menu").hidden=true;$("game").hidden=false;gameStarted=true;
-  $("matchStatus").textContent=`الساحة: ${ARENAS[data.arena]||ARENAS[0]}`;
-  init3D(data.arena);
-  updatePlayers(data.players);
-});
-socket.on("state",data=>{
-  if(!gameStarted)return;
-  updatePlayers(data.players);
-  $("matchStatus").textContent=data.winner?`الفريق ${data.winner==="blue"?"الأزرق":"البرتقالي"} فاز!`:"المباراة شغالة";
-});
-socket.on("roomError",msg=>setStatus(msg));
-socket.on("disconnect",()=>{if(gameStarted)$("matchStatus").textContent="انقطع الاتصال بالسيرفر";});
-
-function init3D(arenaIndex){
-  const stage=$("stage");
-  scene=new THREE.Scene();
-  scene.background=new THREE.Color(ARENA_COLORS[arenaIndex]||0x172b4d);
-  scene.fog=new THREE.Fog(scene.background,18,42);
-  camera=new THREE.PerspectiveCamera(55,stage.clientWidth/stage.clientHeight,.1,100);
-  camera.position.set(0,13,18);camera.lookAt(0,0,0);
-  renderer=new THREE.WebGLRenderer({antialias:true});
-  renderer.setPixelRatio(Math.min(devicePixelRatio,2));
-  renderer.setSize(stage.clientWidth,stage.clientHeight);
-  stage.appendChild(renderer.domElement);
-  scene.add(new THREE.HemisphereLight(0xffffff,0x35405a,2));
-  const light=new THREE.DirectionalLight(0xffffff,2.2);light.position.set(5,12,8);scene.add(light);
-
-  arenaFloor=new THREE.Mesh(new THREE.CylinderGeometry(10,10,.5,64),
-    new THREE.MeshStandardMaterial({color:0x303a4b,roughness:.8}));
-  arenaFloor.position.y=-.4;scene.add(arenaFloor);
-  const ring=new THREE.Mesh(new THREE.TorusGeometry(9.6,.12,8,80),
-    new THREE.MeshStandardMaterial({color:0xffb347,metalness:.5}));
-  ring.rotation.x=Math.PI/2;ring.position.y=-.08;scene.add(ring);
-
-  for(let i=0;i<12;i++){
-    const a=i/12*Math.PI*2;
-    const post=new THREE.Mesh(new THREE.CylinderGeometry(.16,.16,3,12),
-      new THREE.MeshStandardMaterial({color:0xc5d1df,metalness:.5}));
-    post.position.set(Math.cos(a)*10,1.1,Math.sin(a)*10);scene.add(post);
-  }
-  window.addEventListener("resize",resize3D);
-  window.addEventListener("keydown",onKeyDown);
-  window.addEventListener("keyup",onKeyUp);
-  animate();
-}
-function resize3D(){
-  if(!renderer)return;const stage=$("stage");
-  camera.aspect=stage.clientWidth/stage.clientHeight;camera.updateProjectionMatrix();
-  renderer.setSize(stage.clientWidth,stage.clientHeight);
-}
-function makeAvatar(player){
-  const group=new THREE.Group();
-  const color=player.team==="blue"?0x32a5ff:0xff9238;
-  const mat=new THREE.MeshStandardMaterial({color,roughness:.65});
-  const body=new THREE.Mesh(new THREE.CapsuleGeometry(.48,.85,5,10),mat);
-  body.position.y=1.05;group.add(body);
-  const head=new THREE.Mesh(new THREE.SphereGeometry(.34,18,14),
-    new THREE.MeshStandardMaterial({color:0xe6b99a}));
-  head.position.y=1.95;group.add(head);
-  const aura=new THREE.Mesh(new THREE.TorusGeometry(.62,.045,8,32),
-    new THREE.MeshBasicMaterial({color:player.team==="blue"?0x54c7ff:0xffb347}));
-  aura.rotation.x=Math.PI/2;aura.position.y=.12;group.add(aura);
-  const bar=new THREE.Mesh(new THREE.BoxGeometry(1.1,.09,.08),
-    new THREE.MeshBasicMaterial({color:0x25e878}));
-  bar.position.y=2.45;group.add(bar);group.userData.healthBar=bar;
-  group.userData.playerId=player.id;
-  scene.add(group);return group;
-}
-function updatePlayers(players){
-  const alive=new Set(players.map(p=>p.id));
-  for(const [id,obj] of avatars){if(!alive.has(id)){scene.remove(obj);avatars.delete(id);}}
-  players.forEach(p=>{
-    let obj=avatars.get(p.id);if(!obj){obj=makeAvatar(p);avatars.set(p.id,obj);}
-    obj.position.set(p.x,0,p.z);
-    obj.userData.healthBar.scale.x=Math.max(.01,p.health/100);
-    obj.userData.healthBar.position.x=-(1-p.health/100)*.55;
-    if(p.id===myId)myPosition={x:p.x,z:p.z};
-  });
-}
-function onKeyDown(e){keys.add(e.key.toLowerCase());if(e.code==="Space"){e.preventDefault();usePower();}}
-function onKeyUp(e){keys.delete(e.key.toLowerCase());}
-function usePower(){if(gameStarted&&socket)socket.emit("power",{code:roomCode});}
-function animate(){
-  if(!gameStarted)return;
-  requestAnimationFrame(animate);
-  const now=performance.now();
-  let dx=0,dz=0;
-  if(keys.has("w")||keys.has("arrowup"))dz-=.12;
-  if(keys.has("s")||keys.has("arrowdown"))dz+=.12;
-  if(keys.has("a")||keys.has("arrowleft"))dx-=.12;
-  if(keys.has("d")||keys.has("arrowright"))dx+=.12;
-  if((dx||dz)&&now-lastMoveSent>50){
-    myPosition.x=Math.max(-8,Math.min(8,myPosition.x+dx));
-    myPosition.z=Math.max(-8,Math.min(8,myPosition.z+dz));
-    socket.emit("move",{code:roomCode,x:myPosition.x,z:myPosition.z});
-    lastMoveSent=now;
-  }
-  const mine=avatars.get(myId);
-  if(mine){camera.position.x+=(mine.position.x-camera.position.x)*.025;camera.lookAt(mine.position.x,0,mine.position.z);}
-  renderer.render(scene,camera);
-}
+function drawFighter(ctx,x,y,s,color,enemy){ctx.save();ctx.translate(x,y);ctx.scale(s,s);ctx.fillStyle="#0006";ctx.beginPath();ctx.ellipse(0,0,24,7,0,0,Math.PI*2);ctx.fill();ctx.fillStyle=color;ctx.fillRect(-17,-57,34,43);ctx.fillStyle="#efbd98";ctx.beginPath();ctx.arc(0,-70,15,0,Math.PI*2);ctx.fill();ctx.fillStyle="#20202a";ctx.fillRect(-14,-85,28,7);ctx.strokeStyle=color;ctx.lineWidth=9;ctx.lineCap="round";ctx.beginPath();ctx.moveTo(-13,-48);ctx.lineTo(-22,-25);ctx.moveTo(13,-48);ctx.lineTo(22,-25);ctx.stroke();ctx.strokeStyle="#222";ctx.lineWidth=10;ctx.beginPath();ctx.moveTo(-8,-14);ctx.lineTo(-10,0);ctx.moveTo(8,-14);ctx.lineTo(10,0);ctx.stroke();if(enemy){ctx.fillStyle="#fff";ctx.font="bold 11px Arial";ctx.textAlign="center";ctx.fillText("BOT",0,-96);}ctx.restore();}
+function bindHold(id,key){const b=$(id);const on= e=>{e.preventDefault();keys[key]=true;};const off=e=>{e.preventDefault();keys[key]=false;};b.addEventListener("pointerdown",on);["pointerup","pointercancel","pointerleave"].forEach(ev=>b.addEventListener(ev,off));}
+bindHold("leftBtn","left");bindHold("rightBtn","right");$("hitBtn").onclick=hit;$("powerBtn").onclick=power;$("blockBtn").addEventListener("pointerdown",()=>blocking=true);["pointerup","pointercancel","pointerleave"].forEach(e=>$("blockBtn").addEventListener(e,()=>blocking=false));
+window.addEventListener("keydown",e=>{if(e.key==="ArrowLeft"||e.key.toLowerCase()==="a")keys.left=true;if(e.key==="ArrowRight"||e.key.toLowerCase()==="d")keys.right=true;if(e.code==="Space"){e.preventDefault();hit();}});window.addEventListener("keyup",e=>{if(e.key==="ArrowLeft"||e.key.toLowerCase()==="a")keys.left=false;if(e.key==="ArrowRight"||e.key.toLowerCase()==="d")keys.right=false;});
+$("nextBtn").onclick=()=>{level++;$("levelSelect").textContent=level;startFight();};$("retryBtn").onclick=startFight;$("chooseBtn").onclick=()=>{$("resultModal").hidden=true;$("fightScreen").hidden=true;$("selectScreen").hidden=false;$("levelSelect").textContent=level;};$("menuBtn").onclick=()=>{cancelAnimationFrame(raf);$("fightScreen").hidden=true;$("selectScreen").hidden=false;$("levelSelect").textContent=level;};
